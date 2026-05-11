@@ -14,9 +14,16 @@ st.set_page_config(page_title="Seguimiento Presupuestos", page_icon="💰", layo
 
 st.title("💰 Seguimiento de Presupuestos")
 
-# ==================== CONFIGURACIÓN ====================
-CORREO_DESTINO = "fmo@fundacionmasaveu.com"  # 👈 CAMBIAR POR EL CORREO DESEADO
-# =======================================================
+# ==================== CONFIGURACIÓN DEL CORREO ====================
+# ⚠️ IMPORTANTE: Cambia estos 3 datos por los tuyos
+EMAIL_REMITENTE = "varelam.jose@alumnos25.fundacionmasaveu.com"  # Tu correo Gmail
+CORREO_DESTINO = "ana@fundacionmasaveu.com"   # Correo que recibirá los informes
+
+# 🔐 CONTRASEÑA DE APLICACIÓN (16 caracteres con espacios)
+# Para obtenerla: https://myaccount.google.com/apppasswords
+# Requiere tener activada la verificación en 2 pasos
+EMAIL_PASSWORD = "hgva qxsd hvdn cbhx"  # 👈 PEGA AQUÍ TU CONTRASEÑA DE APLICACIÓN
+# ================================================================
 
 # Barra lateral
 st.sidebar.header("👷 Datos del trabajador")
@@ -133,45 +140,64 @@ if len(st.session_state.datos_presupuesto) > 0:
     
     with col2:
         if st.button("📧 Enviar por correo", type="primary"):
-            try:
-                EMAIL_REMITENTE = "fmo@fundacionmasaveu.com"  # 👈 CAMBIAR
-                # Usar secrets o poner contraseña directamente
-                EMAIL_PASSWORD = st.secrets["gmail"]["password"] if "secrets" in dir(st) else "TU_CONTRASEÑA_APP"
-                
-                msg = MIMEMultipart()
-                msg['From'] = EMAIL_REMITENTE
-                msg['To'] = CORREO_DESTINO
-                msg['Subject'] = f"Informe Presupuestos - {datetime.now().strftime('%d/%m/%Y')}"
-                
-                cuerpo = f"""
+            # Validar que la contraseña no sea la de ejemplo
+            if EMAIL_PASSWORD == "xxxx xxxx xxxx xxxx":
+                st.error("❌ No has configurado la contraseña de aplicación. Revisa la configuración.")
+            else:
+                try:
+                    # Configuración del servidor Gmail
+                    server = smtplib.SMTP('smtp.gmail.com', 587)
+                    server.ehlo()
+                    server.starttls()
+                    server.ehlo()
+                    
+                    # Iniciar sesión
+                    server.login(EMAIL_REMITENTE, EMAIL_PASSWORD)
+                    
+                    # Crear mensaje
+                    msg = MIMEMultipart()
+                    msg['From'] = EMAIL_REMITENTE
+                    msg['To'] = CORREO_DESTINO
+                    msg['Subject'] = f"Informe Presupuestos - {datetime.now().strftime('%d/%m/%Y')}"
+                    
+                    # Cuerpo del mensaje (sin caracteres especiales para evitar errores)
+                    cuerpo = f"""
 INFORME DE SEGUIMIENTO DE PRESUPUESTOS
 
 Fecha de envio: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 Registros totales: {len(st.session_state.datos_presupuesto)}
-Total gastado: {total_gastado:,.2f} €
+Total gastado: {total_gastado:,.2f} EUR
 Trabajador: {nombre}
 
-Adjunto encontraras el Excel con todos los gastos.
+----
+Este informe ha sido generado automaticamente.
 """
-                msg.attach(MIMEText(cuerpo.encode('utf-8'), 'plain', 'utf-8'))
-                
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(excel_data)
-                encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename="presupuesto_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx"')
-                msg.attach(part)
-                
-                server = smtplib.SMTP('smtp.gmail.com', 587)
-                server.starttls()
-                server.login(EMAIL_REMITENTE, EMAIL_PASSWORD)
-                server.send_message(msg)
-                server.quit()
-                
-                st.success(f"✅ Correo enviado a {CORREO_DESTINO}")
-                st.balloons()
-                
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
+                    msg.attach(MIMEText(cuerpo, 'plain', 'utf-8'))
+                    
+                    # Adjuntar archivo Excel
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(excel_data)
+                    encoders.encode_base64(part)
+                    part.add_header(
+                        'Content-Disposition',
+                        f'attachment; filename="presupuesto_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
+                    )
+                    msg.attach(part)
+                    
+                    # Enviar
+                    server.send_message(msg)
+                    server.quit()
+                    
+                    st.success(f"✅ ¡Correo enviado correctamente a {CORREO_DESTINO}!")
+                    st.balloons()
+                    
+                except smtplib.SMTPAuthenticationError:
+                    st.error("❌ Error de autenticacion: Usuario o contraseña incorrectos")
+                    st.info("💡 Asegurate de usar una Contraseña de Aplicacion de Gmail, no tu contraseña normal. Obténla en: https://myaccount.google.com/apppasswords")
+                except smtplib.SMTPException as e:
+                    st.error(f"❌ Error SMTP: {str(e)}")
+                except Exception as e:
+                    st.error(f"❌ Error general: {str(e)}")
     
     # Botón limpiar
     if st.button("🗑️ Borrar todos los registros"):
